@@ -39,6 +39,9 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#ifdef MODESET_DRM_FORMAT
+#include <drm/drm_fourcc.h>
+#endif
 
 struct modeset_dev;
 static int modeset_find_crtc(int fd, drmModeRes *res, drmModeConnector *conn,
@@ -458,9 +461,20 @@ static int modeset_create_fb(int fd, struct modeset_dev *dev)
 	dev->size = creq.size;
 	dev->handle = creq.handle;
 
+#ifndef MODESET_DRM_FORMAT
 	/* create framebuffer object for the dumb-buffer */
 	ret = drmModeAddFB(fd, dev->width, dev->height, 24, 32, dev->stride,
 			   dev->handle, &dev->fb);
+#else
+	uint32_t offsets[4] = { 0 };
+	uint32_t pitches[4] = { dev->stride};
+	uint32_t bo_handles[4] = { dev->handle };
+
+	ret = drmModeAddFB2(fd, dev->width, dev->height,
+                        MODESET_DRM_FORMAT,
+                        bo_handles, pitches, offsets,
+                        &dev->fb, 0);
+#endif
 	if (ret) {
 		fprintf(stderr, "cannot create framebuffer (%d): %m\n",
 			errno);

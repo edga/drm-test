@@ -39,6 +39,9 @@
 #include <unistd.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
+#ifdef MODESET_DRM_FORMAT
+#include <drm/drm_fourcc.h>
+#endif
 
 struct modeset_buf;
 struct modeset_dev;
@@ -358,9 +361,24 @@ static int modeset_create_fb(int fd, struct modeset_buf *buf)
 	buf->size = creq.size;
 	buf->handle = creq.handle;
 
+#ifndef MODESET_DRM_FORMAT
 	/* create framebuffer object for the dumb-buffer */
 	ret = drmModeAddFB(fd, buf->width, buf->height, 24, 32, buf->stride,
 			   buf->handle, &buf->fb);
+#else
+	uint32_t offsets[4] = { 0 };
+	uint32_t pitches[4] = { buf->stride};
+	uint32_t bo_handles[4] = { buf->handle };
+
+	ret = drmModeAddFB2(fd, buf->width, buf->height,
+                        // To see the list of supported planes (formats), run:    modetest -M xilinx_drm -p
+                        // For example: YUYV or AB24
+                        // DRM_FORMAT_YUYV,
+                        MODESET_DRM_FORMAT,
+                        bo_handles, pitches, offsets,
+                        &buf->fb, 0);
+#endif
+
 	if (ret) {
 		fprintf(stderr, "cannot create framebuffer (%d): %m\n",
 			errno);
